@@ -1,20 +1,44 @@
-from ortools.sat.python import cp_model
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional
 
-def solve_room_capacity():
-    # 1. Krijimi i modelit (Truri i AI)
-    model = cp_model.CpModel()
+# Marrim funksioninin nga partnerja
+try:
+    from solver import solve_schedule 
+except ImportError:
+    # Nese ajo s'e ka kry punen, krijojme nje version "fake" (mock)
+    def solve_schedule(capacity, students):
+        return "Solver module not found yet!"
 
-    # 2. Të dhënat (Slice 1: Fokus te Kapaciteti i Dhomave)
-    room_capacity = 25  # Psh. Dhoma 406
-    num_students = 10   # Një vlerë testuese
+# --- PREJ KETU, KODI DUHET TE JETE NE FILLIM TE RRESHTIT ---
 
-    # 3. Poka-Yoke Constraint: Matematika që nuk lejon gabime
-    # Ne po i themi AI: num_students duhet të jetë <= room_capacity
-    is_valid = num_students <= room_capacity
+# Krijojme objektin kryesor te aplikacionit
+app = FastAPI(title="AUTS Logic Engine", version="1.0")
 
-    if is_valid:
-        return "Orari është në rregull: Kapaciteti mjafton."
-    else:
-        return "GABIM: Dhoma nuk ka vend për kaq shumë studentë!"
+# Definojme modelin e te dhenave (Pydantic)
+class RoomRequest(BaseModel):
+    room_name: str
+    capacity: int
+    num_students: int
 
-print(solve_room_capacity())
+# Faqja kryesore (Home)
+@app.get("/")
+def home():
+    return {"status": "Online", "message": "AUTS Logic Engine is ready"}
+
+# Pika ku kryhet puna (Endpoint)
+@app.post("/solve")
+def generate_schedule(request: RoomRequest):
+    # Therrasim logjiken
+    result = solve_schedule(request.capacity, request.num_students)
+
+    # Menaxhojme rastin kur nuk ka zgjidhje
+    if result == "INFEASIBLE":
+        raise HTTPException(status_code=400, detail="No feasible schedule found!")
+    
+    # Kthejme pergjigjen finale
+    return {
+        "status": "Success",
+        "room": request.room_name,
+        "message": result
+    }
