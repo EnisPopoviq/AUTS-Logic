@@ -1,42 +1,47 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware # PRO: Per lidhje me Frontend
+from pydantic import BaseModel, Field # PRO: Per validim te numrave
 from typing import Optional
 
-# Marrim funksioninin nga partnerja
 try:
     from solver import solve_schedule 
 except ImportError:
-    # Nese ajo s'e ka kry punen, krijojme nje version "fake" (mock)
     def solve_schedule(capacity, students):
         return "Solver module not found yet!"
 
-# --- PREJ KETU, KODI DUHET TE JETE NE FILLIM TE RRESHTIT ---
+# PRO: Shtojme meta-data per projektin
+app = FastAPI(
+    title="AUTS Logic Engine",
+    description="API zyrtare për menaxhimin e kapaciteteve në projektin AUTS",
+    version="1.1.0"
+)
 
-# Krijojme objektin kryesor te aplikacionit
-app = FastAPI(title="AUTS Logic Engine", version="1.0")
+# PRO: Lejojme komunikimin me aplikacione tjera (React/Vue/Mobile)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Lejon çdo pajisje me thirr API-ne
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Definojme modelin e te dhenave (Pydantic)
 class RoomRequest(BaseModel):
-    room_name: str
-    capacity: int
-    num_students: int
+    room_name: str = Field(..., example="Dhoma 406")
+    # PRO: Sigurohemi qe kapaciteti nuk eshte nen 1
+    capacity: int = Field(..., gt=0, description="Kapaciteti duhet te jete numer pozitiv")
+    num_students: int = Field(..., ge=0)
 
-# Faqja kryesore (Home)
-@app.get("/")
+@app.get("/", tags=["Health Check"]) # PRO: Tags per dokumentim me te paster
 def home():
     return {"status": "Online", "message": "AUTS Logic Engine is ready"}
 
-# Pika ku kryhet puna (Endpoint)
-@app.post("/solve")
+@app.post("/solve", tags=["Logic"])
 def generate_schedule(request: RoomRequest):
-    # Therrasim logjiken
+    # Logjika e njejte, por tash vjen nga te dhenat e verifikuara
     result = solve_schedule(request.capacity, request.num_students)
 
-    # Menaxhojme rastin kur nuk ka zgjidhje
     if result == "INFEASIBLE":
-        raise HTTPException(status_code=400, detail="No feasible schedule found!")
+        raise HTTPException(status_code=400, detail="Kapaciteti i dhomës është i pamjaftueshëm!")
     
-    # Kthejme pergjigjen finale
     return {
         "status": "Success",
         "room": request.room_name,
